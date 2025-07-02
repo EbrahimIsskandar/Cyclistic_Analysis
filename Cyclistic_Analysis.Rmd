@@ -1,0 +1,115 @@
+
+---
+title: "Cyclistic Bike Share Data Analysis"
+author: "Ebrahim Isskandar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(googledrive)
+```
+
+## Introduction
+
+This analysis explores bike ride data across four quarters. I aim to compare ride behaviors between different user types, understand usage patterns, and derive insights.
+
+## Load and Clean Data
+
+```{r load-data}
+file_ids <- c(
+  "1wDWoOtOS-7H9KjwpkczVOrMiJf8kAvBA",
+  "17Ig2DZWLw5hVa3xIbOdVfYUhPZ1I9K1A",
+  "11K3HQSRQMpeNc_maIDFU3vUUPxOkd5qy",
+  "1Rqi4Eers94NxkAxglexNTGslaEmDY43b"
+)
+
+drive_auth()
+
+for(i in seq_along(file_ids)){
+  drive_download(as_id(file_ids[i]), path = paste0("q", i, ".csv"), overwrite = TRUE)
+}
+
+q1 <- read_csv("q1.csv")
+q2 <- read_csv("q2.csv")
+q3 <- read_csv("q3.csv")
+q4 <- read_csv("q4.csv")
+
+colnames(q2) <- colnames(q1)
+colnames(q3) <- colnames(q1)
+colnames(q4) <- colnames(q1)
+
+all_data <- bind_rows(q1, q2, q3, q4)
+```
+
+```{r clean-data}
+all_data <- all_data %>%
+  mutate(
+    start_time = ymd_hms(start_time),
+    end_time = ymd_hms(end_time),
+    ride_length = as.numeric(difftime(end_time, start_time, units = "mins"))
+  ) %>%
+  filter(ride_length > 0)
+```
+
+## Summary Statistics
+
+```{r summary}
+format(summary(all_data$ride_length), scientific = FALSE)
+```
+
+## Ride Count by User Type
+
+```{r ride-count}
+all_data %>%
+  count(usertype) %>%
+  ggplot(aes(x = usertype, y = n, fill = usertype)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Number of Rides by User Type", x = "User Type", y = "Number of Rides") +
+  theme_minimal()
+```
+
+## Average Ride Length by User Type
+
+```{r avg-ride}
+all_data %>%
+  group_by(usertype) %>%
+  summarise(avg_ride_length = mean(ride_length)) %>%
+  ggplot(aes(x = usertype, y = avg_ride_length, fill = usertype)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Ride Length by User Type", x = "User Type", y = "Ride Duration (minutes)") +
+  theme_minimal()
+```
+
+## Weekly Trends
+
+```{r weekday-trend}
+all_data <- all_data %>%
+  mutate(day_of_week = wday(start_time, label = TRUE))
+
+all_data %>%
+  group_by(usertype, day_of_week) %>%
+  summarise(trip_count = n(), .groups = "drop") %>%
+  ggplot(aes(x = day_of_week, y = trip_count, fill = usertype)) +
+  geom_col(position = "dodge") +
+  labs(title = "Number of Rides per Day of Week by User Type", x = "Day", y = "Number of Rides") +
+  theme_minimal()
+```
+
+## Ride Length Distribution
+
+```{r boxplot}
+all_data %>%
+  ggplot(aes(x = usertype, y = ride_length, fill = usertype)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0, 100)) +
+  labs(title = "Ride Length Comparison by User Type", x = "User Type", y = "Ride Duration (minutes)") +
+  theme_minimal()
+```
+
+## Conclusion
+
+This analysis highlights different riding patterns based on user type. Subscribers tend to ride shorter but more frequently. Understanding these behaviors can help optimize operations and marketing strategies.
